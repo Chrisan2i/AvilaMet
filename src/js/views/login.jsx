@@ -1,17 +1,9 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext } from "react";
 import { Context } from "../store/appContext";
 import { useNavigate } from "react-router-dom";
-import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    GoogleAuthProvider,
-    FacebookAuthProvider,
-    signInWithPopup,
-    sendPasswordResetEmail // Importar para restablecer contraseñas
-} from "firebase/auth";
-import { auth, db } from "../firebase.js";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getUsers, createUser } from "../../api/users"; // 👈 API que conecta con Mongo
 import "../../styles/login.css";
+
 const Login = () => {
     const { actions } = useContext(Context);
     const navigate = useNavigate();
@@ -24,10 +16,10 @@ const Login = () => {
     const [username, setUsername] = useState("");
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState("");
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+    const [resetPasswordEmail, setResetPasswordEmail] = useState("");
 
-    const handleClose = () => {
-        navigate("/");
-    };
+    const handleClose = () => navigate("/");
 
     const validateEmail = (email) => /^[a-zA-Z0-9._%+-]+@correo\.unimet\.edu\.ve$/.test(email);
 
@@ -36,52 +28,43 @@ const Login = () => {
         setError("");
 
         if (!email || !password || !confirmPassword || !name || !lastName || !phone || !username) {
-            setError("Todos los campos son obligatorios.");
-            return;
+            return setError("Todos los campos son obligatorios.");
         }
 
         if (!validateEmail(email)) {
-            setError("El correo debe ser de dominio @correo.unimet.edu.ve.");
-            return;
+            return setError("El correo debe ser de dominio @correo.unimet.edu.ve.");
         }
 
         if (password.length < 6) {
-            setError("La contraseña debe tener al menos 6 caracteres.");
-            return;
+            return setError("La contraseña debe tener al menos 6 caracteres.");
         }
 
         if (password !== confirmPassword) {
-            setError("Las contraseñas no coinciden.");
-            return;
+            return setError("Las contraseñas no coinciden.");
         }
 
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
+            const newUser = {
+                nombre: name,
+                apellido: lastName,
+                email,
+                telefono: phone,
+                nombre_usuario: username,
+                contraseña: password,
+                rol: "Excursionista",
+                fecha_creacion: new Date().toISOString(),
+                fotoPerfil: ""
+            };
 
-            if (!user.uid) {
-                throw new Error("No se obtuvo el UID del usuario.");
-            }
-
-            await setDoc(doc(db, "users", user.uid), {
-                uid: user.uid,
-                name: name,
-                lastName: lastName,
-                email: email,
-                phone: phone,
-                username: username,
-                role: "Excursionista"
-            });
-
-            actions.setUser(user);
+            const userCreated = await createUser(newUser);
+            localStorage.setItem("userId", userCreated.id || userCreated._id);
+            actions.setUser(userCreated);
             navigate("/");
         } catch (error) {
-            console.error("🚨 Error detectado:", error.code, error.message);
-            setError(`Error: ${error.message}`);
+            console.error("Error al registrar:", error);
+            setError("Hubo un error al registrar. Intenta más tarde.");
         }
-
     };
-
 
 
     const handleLogin = async (e) => {
@@ -89,146 +72,41 @@ const Login = () => {
         setError("");
 
         if (!email || !password) {
-            setError("El correo y la contraseña son obligatorios.");
-            return;
+            return setError("El correo y la contraseña son obligatorios.");
         }
 
         try {
-            console.log("🔥 Intentando iniciar sesión con:", email);
+            const users = await getUsers();
+            const foundUser = users.find((u) => u.email === email && u.contraseña === password);
 
-            // Iniciar sesión con Firebase Authentication
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            console.log("✅ Usuario autenticado:", user.uid);
-
-            // Obtener la información del usuario en Firestore usando su UID
-            const userDocRef = doc(db, "users", user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-                const userData = userDocSnap.data();
-                console.log("📌 Datos del usuario en Firestore:", userData);
-
-                // Guardar usuario en el contexto global
-                actions.setUser({
-                    uid: user.uid,
-                    email: user.email,
-                    role: userData.rol, // Asegurar que coincida con Firestore
-                    name: userData.nombre,
-                    lastName: userData.apellido
-                });
-
-                console.log("✅ Usuario guardado en contexto con rol:", userData.rol);
-
-                // Redirigir según el rol
-                if (userData.rol === "Admin") {
-                    console.log("🚀 Redirigiendo a Admin Dashboard...");
-                    navigate("/");
-                } else {
-                    console.log("🏠 Redirigiendo a Home...");
-                    navigate("/");
-                }
-            } else {
-                console.error("🚨 No se encontró el usuario en Firestore.");
-                setError("Error: No se encontraron los datos del usuario.");
+            if (!foundUser) {
+                return setError("Credenciales incorrectas.");
             }
-        } catch (error) {
-            console.error("🚨 Error al iniciar sesión:", error.code, error.message);
 
-            if (error.code === "auth/user-not-found") {
-                setError("Usuario no encontrado. Verifica tus credenciales.");
-            } else if (error.code === "auth/wrong-password") {
-                setError("Contraseña incorrecta. Intenta nuevamente.");
-            } else {
-                setError("Error al iniciar sesión. Intenta más tarde.");
-            }
+            localStorage.setItem("userId", foundUser.id || foundUser._id);
+            actions.setUser(foundUser);
+            navigate("/");
+        } catch (err) {
+            console.error("Error al iniciar sesión:", err);
+            setError("Error de servidor al iniciar sesión.");
         }
     };
-
-
-
-
-    const handleGoogleLogin = async () => {
-        const provider = new GoogleAuthProvider();
-
-        try {
-            const result = await signInWithPopup(auth, provider);
-            const user = result.user;
-
-            console.log("✅ Usuario autenticado con Google:", user);
-
-            // Referencia al documento del usuario en Firestore
-            const userDocRef = doc(db, "users", user.uid);
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (!userDocSnap.exists()) {
-                // Si el usuario no existe en Firestore, lo creamos con rol "Excursionista"
-                console.log("🆕 Creando nuevo usuario en Firestore...");
-                await setDoc(userDocRef, {
-                    uid: user.uid,
-                    name: user.displayName || "",
-                    email: user.email,
-                    phone: user.phoneNumber || "",
-                    username: user.displayName ? user.displayName.replace(/\s+/g, "").toLowerCase() : "",
-                    role: "Excursionista" // 🔥 Rol por defecto
-                });
-                console.log("✅ Usuario guardado en Firestore con rol Excursionista.");
-            } else {
-                console.log("📌 Usuario ya registrado en Firestore.");
-            }
-
-            // Obtener los datos actualizados del usuario y guardarlos en el contexto
-            const updatedUserDoc = await getDoc(userDocRef);
-            const userData = updatedUserDoc.data();
-
-            actions.setUser(userData);
-
-            // Redirigir según el rol del usuario
-            if (userData.role === "Admin") {
-                navigate("/");
-            } else {
-                navigate("/");
-            }
-        } catch (error) {
-            console.error("🚨 Error con Google:", error.message);
-            setError("Error al iniciar sesión con Google.");
-        }
-    };
-
-
-    const handleFacebookLogin = async () => {
-        const provider = new FacebookAuthProvider();
-        try {
-            const result = await signInWithPopup(auth, provider);
-            actions.setUser(result.user); // Establecer el usuario en el contexto
-            navigate("/");  // Ir al Home después de iniciar sesión con Facebook
-        } catch (error) {
-            console.error("Error con Facebook:", error.message);
-            setError("Error al iniciar sesión con Facebook.");
-        }
-    };
-
-    const [isResettingPassword, setIsResettingPassword] = useState(false); // Agregar este estado
-    const [resetPasswordEmail, setResetPasswordEmail] = useState(""); // Agregar el estado para el correo del reset
 
     const handleResetPassword = async (e) => {
-        e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
-        if (!resetPasswordEmail) {
-            setError("Por favor, ingrese un correo.");
-            return;
-        }
-
-        try {
-            await sendPasswordResetEmail(auth, resetPasswordEmail);
-            setError("Te hemos enviado un correo para restablecer tu contraseña.");
-            setIsResettingPassword(false); // Cerrar el formulario de restablecimiento
-        } catch (error) {
-            console.error("🚨 Error al restablecer la contraseña:", error.message);
-            setError("Error al restablecer la contraseña.");
-        }
+        e.preventDefault();
+        setError("Funcionalidad de recuperación aún no implementada en Mongo.");
     };
 
+    const handleGoogleLogin = () => {
+        setError("Inicio con Google no disponible sin Firebase.");
+    };
+
+    const handleFacebookLogin = () => {
+        setError("Inicio con Facebook no disponible sin Firebase.");
+    };
+
+    // ⛔ NO TOCAMOS TU HTML ⛔
+    // ... (todo el return JSX lo dejas exactamente igual como ya lo tienes)
 
     return (
         <div className="w-100 bg-custom-yellow">

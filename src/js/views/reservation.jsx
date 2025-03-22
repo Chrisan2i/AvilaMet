@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js"; // Reintegrado
-import { db, auth } from "../../js/firebase.js";
-import { collection, addDoc, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { getDestinations } from "../../api/destinations";
+import { getExcursions, updateExcursion } from "../../api/excursions";
+import { getUserById } from "../../api/users";
+import { createReservation } from "../../api/reservations";
 
 const Reservation = () => {
     const [reserva, setReserva] = useState({
@@ -10,56 +10,52 @@ const Reservation = () => {
         apellido: "",
         email: "",
         telefono: "",
-        numeroPersonas: 1, // Valor inicial de 1 persona
         fecha: "",
         ruta: "",
         guiaId: "",
     });
-
-    const [precioTotal, setPrecioTotal] = useState(1);
-    const [montoPersonalizado, setMontoPersonalizado] = useState(1);
+    const [usuario, setUsuario] = useState(null);
+    const [destinos, setDestinos] = useState([]);
     const [excursiones, setExcursiones] = useState([]);
     const [excursionSeleccionada, setExcursionSeleccionada] = useState(null);
-    const [usuario, setUsuario] = useState(null);
-    const [destinos, setDestinos] = useState([]); // Nuevo estado para los destinos
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                setUsuario(user); // Usuario autenticado
-                setReserva({ ...reserva, email: user.email, telefono: user.phoneNumber });
+        const cargarUsuario = async () => {
+            const userId = localStorage.getItem("userId");
+            if (!userId) return;
+
+            try {
+                const user = await getUserById(userId);
+                setUsuario(user);
+                setReserva((prev) => ({
+                    ...prev,
+                    email: user.email || "",
+                    telefono: user.telefono || "",
+                    nombre: user.nombre || "",
+                    apellido: user.apellido || "",
+                }));
+            } catch (err) {
+                console.error("Error al obtener usuario:", err);
             }
-        });
+        };
 
-        return () => unsubscribe(); // Limpiar el listener
-    }, [reserva.email]);
+        cargarUsuario();
+    }, []);
 
-    useEffect(() => {
-        const numPersonas = reserva.numeroPersonas ? parseInt(reserva.numeroPersonas, 10) || 1 : 1;
-        const montoMinimo = numPersonas * 1; // El monto mínimo es $1 por persona
-        setPrecioTotal(montoMinimo);
-        setMontoPersonalizado(montoMinimo);
-    }, [reserva.numeroPersonas]);
-
-    // Cargar los destinos desde Firestore
     useEffect(() => {
         const fetchDestinations = async () => {
             try {
-                const querySnapshot = await getDocs(collection(db, "destinations"));
-                const availableDestinations = querySnapshot.docs.map(doc => ({
-                    ...doc.data(),
-                }));
-                setDestinos(availableDestinations);
-                console.log("Destinations loaded:", availableDestinations);
+                const data = await getDestinations();
+                setDestinos(data);
             } catch (error) {
-                console.error("Error al obtener los destinos:", error);
+                console.error("Error al obtener destinos:", error);
             }
         };
 
         fetchDestinations();
     }, []);
 
-    const handleChange = async (e) => {
+    const handleChange = (e) => {
         const { name, value } = e.target;
         setReserva({ ...reserva, [name]: value });
 
@@ -71,12 +67,14 @@ const Reservation = () => {
 
     const buscarExcursiones = async (rutaSeleccionada) => {
         try {
-            const q = query(collection(db, "excursions"), where("nombre", "==", rutaSeleccionada));
-            const querySnapshot = await getDocs(q);
-            const resultados = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(excursion => !excursion.reservadoPor); // Filtra las excursiones donde "reservadoPor" está vacío
-            setExcursiones(resultados);
+            const todas = await getExcursions();
+            const filtradas = todas
+                .filter((ex) => ex.nombre === rutaSeleccionada && !ex.reservadoPor)
+                .map((ex) => ({
+                    ...ex,
+                    guia: ex.guiaNombre || "Guía asignado",
+                }));
+            setExcursiones(filtradas);
         } catch (error) {
             console.error("Error al buscar excursiones:", error);
         }
@@ -88,7 +86,7 @@ const Reservation = () => {
             ...reserva,
             ruta: excursion.nombre,
             guiaId: excursion.guiaId,
-            fecha: excursion.fecha
+            fecha: excursion.fecha,
         });
     };
 
@@ -99,75 +97,40 @@ const Reservation = () => {
 
     const handleReserva = async () => {
         try {
-            if (parseInt(reserva.numeroPersonas) > 20) {
-                alert("El máximo de personas por reserva es 20.");
-                return;
-            }
-
-            // Verificación de campos
-            if (!reserva.guiaId) {
-                throw new Error("El campo guía no puede estar vacío.");
-            }
+            if (!reserva.guiaId) throw new Error("El campo guía no puede estar vacío.");
 
             const reservaData = {
-                nombre: usuario.displayName || "",
-                email: usuario.email || "",
-                telefono: usuario.phoneNumber || "",
-                numeroPersonas: reserva.numeroPersonas || 1,
-                ruta: reserva.ruta || "",
-                fecha: reserva.fecha || "",
+                nombre: reserva.nombre,
+                apellido: reserva.apellido,
+                email: reserva.email,
+                telefono: reserva.telefono,
+                ruta: reserva.ruta,
+                fecha: reserva.fecha,
                 guiaId: reserva.guiaId,
-                pagoExitoso: true, // Cambiado: se hace la reserva sin necesidad de pago exitoso
             };
 
-            // Asegúrate de que todos los campos estén definidos antes de enviar
             for (let key in reservaData) {
-                if (reservaData[key] === undefined || reservaData[key] === null || reservaData[key] === "") {
-                    if (key !== "telefono") {
-                        throw new Error(`El campo ${key} no puede estar nulo, indefinido o vacío`);
-                    }
+                if (!reservaData[key] && key !== "telefono") {
+                    throw new Error(`El campo ${key} no puede estar vacío.`);
                 }
             }
 
-            console.log("Datos de reserva:", reservaData); // Verifica los datos
+            const created = await createReservation(reservaData);
 
-            // Crear el ID de la reserva manualmente (con un UUID o cualquier otro método)
-            const idReserva = new Date().getTime().toString(); // Usamos el timestamp como un ID único
-
-            // Agregar la reserva en Firestore
-            const reservaDocRef = await addDoc(collection(db, "reservas"), { ...reservaData, idReserva });
-
-            // Ahora actualizamos la excursión seleccionada con el idReserva
             if (excursionSeleccionada) {
-                const excursionRef = doc(db, "excursions", excursionSeleccionada.id);
-                await updateDoc(excursionRef, {
-                    reservadoPor: idReserva // Agregar el id de la reserva a la excursión
+                await updateExcursion(excursionSeleccionada._id || excursionSeleccionada.id, {
+                    reservadoPor: created._id,
                 });
             }
 
             alert("Reserva realizada con éxito.");
-
-            setReserva({
-                nombre: "",
-                apellido: "",
-                email: "",
-                telefono: "",
-                numeroPersonas: 1,
-                fecha: "",
-                ruta: "",
-                guiaId: "",
-            });
-
+            setReserva({ nombre: "", apellido: "", email: "", telefono: "", fecha: "", ruta: "", guiaId: "" });
+            setExcursionSeleccionada(null);
         } catch (error) {
             console.error("Error al realizar la reserva:", error);
             alert("Hubo un error al realizar la reserva: " + error.message);
         }
     };
-
-    const handlePagoExitoso = (details) => {
-        alert("¡Pago realizado con éxito!");
-    };
-
     return (
         <>
             <div className="container-fluid p-4 text-center" style={{ backgroundColor: "#045c2c" }}>
@@ -196,7 +159,8 @@ const Reservation = () => {
                             <div key={excursion.id} className="col-md-4 mb-4">
                                 <div className="card shadow-lg p-3 text-center" style={{ borderRadius: "15px" }}>
                                     <h5 className="fw-bold">{excursion.nombre}</h5>
-                                    <p className="text-muted">{excursion.descripcion}</p>
+                                    <p className="text-muted">Guía: {excursion.guia}</p>
+                                    <p className="text-muted">Fecha: {excursion.fecha}</p>
                                     <button className="btn btn-success mt-2" onClick={() => handleSeleccionarExcursion(excursion)}>
                                         Seleccionar
                                     </button>
@@ -223,53 +187,11 @@ const Reservation = () => {
 
                 <div className="row mt-5 justify-content-center">
                     <div className="col-12 col-md-4 mb-5 p-4 border rounded shadow bg-light">
-                        <form>
-                            <div className="mb-3">
-                                <label className="fw-bold">Cantidad de personas (máximo 20)</label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    name="numeroPersonas"
-                                    value={reserva.numeroPersonas}
-                                    onChange={handleChange}
-                                    min="1"
-                                    max="20"
-                                    required
-                                />
-                            </div>
-
-                            <div className="mb-3">
-                                <label className="fw-bold">Monto a pagar (mínimo ${precioTotal.toFixed(2)})</label>
-                                <input type="number" className="form-control"
-                                    value={montoPersonalizado} onChange={(e) => setMontoPersonalizado(parseFloat(e.target.value))}
-                                    min={precioTotal} step="0.01" />
-                            </div>
-
-                            {/* PayPal Integration */}
-                            <PayPalScriptProvider options={{ "client-id": "AbB7-32DDP6ODkkI8EX_YARuWejKXP9ANCbQjpGK5KTXpzcRTPxgpIcCqNekvKHyFj7Jge8B5nyD88vF" }}>
-                                <PayPalButtons
-                                    style={{ layout: "vertical" }}
-                                    createOrder={(data, actions) => {
-                                        return actions.order.create({
-                                            purchase_units: [
-                                                {
-                                                    amount: {
-                                                        value: montoPersonalizado.toFixed(2), // Monto mínimo
-                                                    },
-                                                },
-                                            ],
-                                        });
-                                    }}
-                                    onApprove={handlePagoExitoso}
-                                />
-                            </PayPalScriptProvider>
-
-                            <button type="button" className="btn text-white w-100 mt-3"
-                                style={{ backgroundColor: "#045c2c", borderRadius: "10px", fontSize: "18px" }}
-                                onClick={handleReserva}>
-                                Reservar
-                            </button>
-                        </form>
+                        <button type="button" className="btn text-white w-100"
+                            style={{ backgroundColor: "#045c2c", borderRadius: "10px", fontSize: "18px" }}
+                            onClick={handleReserva}>
+                            Confirmar Reserva
+                        </button>
                     </div>
                 </div>
             </div>

@@ -1,186 +1,109 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { Context } from '../store/appContext';
-import { db, auth } from '../firebase';
-import { addDoc, collection, getDocs, updateDoc, doc, orderBy, query, deleteDoc, getDoc } from "firebase/firestore";
-import axios from "axios";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import React, { useState, useEffect } from 'react';
+import { getPosts, createPost, updatePost, deletePostById } from '../../api/posts';
+import { getUserById } from '../../api/users';
+import axios from 'axios';
 
 const Forum = () => {
-    const { store } = useContext(Context);
     const [posts, setPosts] = useState([]);
     const [newPost, setNewPost] = useState({ text: '', image: null });
     const [user, setUser] = useState(null);
     const [editingPostId, setEditingPostId] = useState(null);
     const [editedText, setEditedText] = useState('');
-
-    // Imagen predeterminada si no hay foto de perfil
     const defaultProfilePhoto = "https://res.cloudinary.com/do9dtxrvh/image/upload/v1742413057/Untitled_design_1_hvuwau.png";
 
     useEffect(() => {
-        const auth = getAuth();
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        const loadPosts = async () => {
-            const postsQuery = query(collection(db, "posts"), orderBy("date", "desc"));
-            const querySnapshot = await getDocs(postsQuery);
-            const postsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setPosts(postsData);
+        const fetchUser = async () => {
+            const id = localStorage.getItem("userId");
+            if (id) {
+                const userData = await getUserById(id);
+                setUser({ ...userData, uid: id }); // simula estructura de Firebase auth
+            }
         };
-        loadPosts();
+
+        const fetchPosts = async () => {
+            const postList = await getPosts();
+            const sorted = postList.sort((a, b) => new Date(b.date) - new Date(a.date));
+            setPosts(sorted);
+        };
+
+        fetchUser();
+        fetchPosts();
     }, []);
-
-    // Función para obtener el username y la foto de perfil desde Firestore
-    const getUserInfo = async (uid) => {
-        try {
-            const userDocRef = doc(db, "users", uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-                const userData = userDocSnap.data();
-                return {
-                    username: userData.username || "Usuario sin nombre",
-                    photo: userData.fotoPerfil || defaultProfilePhoto
-                };
-            } else {
-                console.log("No se encontró el usuario en Firestore.");
-                return {
-                    username: "Usuario sin nombre",
-                    photo: defaultProfilePhoto
-                };
-            }
-        } catch (error) {
-            console.error("Error al obtener los datos del usuario:", error);
-            return {
-                username: "Usuario sin nombre",
-                photo: defaultProfilePhoto
-            };
-        }
-    };
-
-    const handlePostSubmit = async () => {
-        if (!user) {
-            alert("Debes iniciar sesión para publicar.");
-            return;
-        }
-
-        if (newPost.text || newPost.image) {
-            const currentDate = new Date().toLocaleString();
-            let imageUrl = "";
-
-            if (newPost.image) {
-                const formData = new FormData();
-                formData.append("file", newPost.image);
-                formData.append("upload_preset", "mi_preset");
-
-                await axios.post("https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", formData)
-                    .then(response => {
-                        imageUrl = response.data.secure_url;
-                    }).catch(error => {
-                        console.error("Error al subir la imagen a Cloudinary:", error);
-                    });
-            }
-
-            const userInfo = await getUserInfo(user.uid); // Obtener username y foto
-
-            const newPostData = {
-                text: newPost.text,
-                image: imageUrl,
-                date: currentDate,
-                user: userInfo.username, // Usar username
-                userPhoto: userInfo.photo, // Guardar la foto de perfil
-                userId: user.uid,
-                comments: [],
-                likes: 0,
-                likedBy: []
-            };
-
-            await addDoc(collection(db, "posts"), newPostData);
-
-            const postsQuery = query(collection(db, "posts"), orderBy("date", "desc"));
-            const querySnapshot = await getDocs(postsQuery);
-            const postsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setPosts(postsData);
-
-            setNewPost({ text: '', image: null });
-        }
-    };
 
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
-        if (file) {
-            setNewPost({ ...newPost, image: file });
+        if (file) setNewPost({ ...newPost, image: file });
+    };
+
+    const handlePostSubmit = async () => {
+        if (!user) return alert("Debes iniciar sesión para publicar.");
+
+        let imageUrl = '';
+        if (newPost.image) {
+            const formData = new FormData();
+            formData.append("file", newPost.image);
+            formData.append("upload_preset", "mi_preset");
+
+            try {
+                const response = await axios.post("https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", formData);
+                imageUrl = response.data.secure_url;
+            } catch (error) {
+                console.error("Error subiendo imagen:", error);
+            }
         }
+
+        const postData = {
+            text: newPost.text,
+            image: imageUrl,
+            date: new Date().toISOString(),
+            user: user.nombre_usuario || user.nombre || "Usuario",
+            userPhoto: user.fotoPerfil || defaultProfilePhoto,
+            userId: user.uid,
+            comments: [],
+            likes: 0,
+            likedBy: [],
+        };
+
+        await createPost(postData);
+        const updated = await getPosts();
+        setPosts(updated.reverse());
+        setNewPost({ text: '', image: null });
     };
 
     const handleAddComment = async (index, comment) => {
-        if (!user) {
-            alert("Debes iniciar sesión para comentar.");
-            return;
-        }
-        if (comment.trim() === '') return;
+        if (!user) return alert("Debes iniciar sesión para comentar.");
+        if (!comment.trim()) return;
 
         const updatedPosts = [...posts];
         const post = updatedPosts[index];
-        const userInfo = await getUserInfo(user.uid); // Obtener username (sin foto para comentarios por ahora)
 
         const newComment = {
             text: comment,
-            user: userInfo.username, // Usar username
+            user: user.nombre_usuario || user.nombre,
             userId: user.uid,
-            date: new Date().toLocaleString()
+            date: new Date().toLocaleString(),
         };
+
         post.comments.push(newComment);
         setPosts(updatedPosts);
-
-        const postRef = doc(db, "posts", post.id);
-        await updateDoc(postRef, {
-            comments: post.comments
-        }).catch(error => {
-            console.error("Error al actualizar los comentarios en Firestore:", error);
-        });
+        await updatePost(post._id || post.id, { comments: post.comments });
     };
 
     const handleDeleteComment = async (postIndex, commentIndex) => {
-        if (!user) {
-            alert("Debes iniciar sesión para borrar un comentario.");
-            return;
-        }
-
-        const updatedPosts = [...posts];
-        const post = updatedPosts[postIndex];
+        const post = posts[postIndex];
         const comment = post.comments[commentIndex];
 
-        if (comment.userId !== user.uid) {
-            alert("Solo puedes borrar tus propios comentarios.");
-            return;
+        if (!user || comment.userId !== user.uid) {
+            return alert("Solo puedes borrar tus propios comentarios.");
         }
 
         post.comments.splice(commentIndex, 1);
-        setPosts(updatedPosts);
-
-        const postRef = doc(db, "posts", post.id);
-        await updateDoc(postRef, {
-            comments: post.comments
-        }).catch(error => {
-            console.error("Error al borrar el comentario en Firestore:", error);
-        });
+        setPosts([...posts]);
+        await updatePost(post._id || post.id, { comments: post.comments });
     };
 
     const handleLike = async (index) => {
-        if (!user) {
-            alert("Debes iniciar sesión para dar like.");
-            return;
-        }
+        if (!user) return alert("Debes iniciar sesión para dar like.");
 
         const updatedPosts = [...posts];
         const post = updatedPosts[index];
@@ -188,48 +111,32 @@ const Forum = () => {
 
         if (userLiked) {
             post.likes -= 1;
-            post.likedBy = post.likedBy.filter(uid => uid !== user.uid);
+            post.likedBy = post.likedBy.filter(id => id !== user.uid);
         } else {
             post.likes += 1;
             post.likedBy.push(user.uid);
         }
 
         setPosts(updatedPosts);
-
-        const postRef = doc(db, "posts", post.id);
-        await updateDoc(postRef, {
+        await updatePost(post._id || post.id, {
             likes: post.likes,
             likedBy: post.likedBy
-        }).catch(error => {
-            console.error("Error al actualizar los likes en Firestore:", error);
         });
     };
 
     const handleShare = (index) => {
         const postUrl = `${window.location.href}#post-${index}`;
-        navigator.clipboard.writeText(postUrl).then(() => {
-            alert("¡Enlace copiado al portapapeles!");
-        });
+        navigator.clipboard.writeText(postUrl);
+        alert("¡Enlace copiado!");
     };
 
     const handleDeletePost = async (postId) => {
-        if (!user) {
-            alert("Debes iniciar sesión para borrar una publicación.");
-            return;
-        }
+        const post = posts.find(p => p._id === postId || p.id === postId);
+        if (!user || post.userId !== user.uid) return alert("Solo puedes borrar tus propias publicaciones.");
 
-        const post = posts.find(p => p.id === postId);
-        if (!post.userId || post.userId !== user.uid) {
-            alert("Solo puedes borrar tus propias publicaciones.");
-            return;
-        }
-
-        if (window.confirm("¿Estás seguro de que quieres borrar esta publicación?")) {
-            await deleteDoc(doc(db, "posts", postId)).catch(error => {
-                console.error("Error al borrar la publicación en Firestore:", error);
-            });
-
-            setPosts(posts.filter(p => p.id !== postId));
+        if (window.confirm("¿Eliminar publicación?")) {
+            await deletePostById(postId);
+            setPosts(posts.filter(p => p._id !== postId && p.id !== postId));
         }
     };
 
@@ -239,34 +146,13 @@ const Forum = () => {
     };
 
     const handleSaveEdit = async (postId) => {
-        if (!user) {
-            alert("Debes iniciar sesión para editar una publicación.");
-            return;
-        }
+        const post = posts.find(p => p._id === postId || p.id === postId);
+        if (!user || post.userId !== user.uid) return alert("Solo puedes editar tus publicaciones.");
+        if (!editedText.trim()) return alert("Texto vacío.");
 
-        const post = posts.find(p => p.id === postId);
-        if (!post.userId || post.userId !== user.uid) {
-            alert("Solo puedes editar tus propias publicaciones.");
-            return;
-        }
-
-        if (editedText.trim() === '') {
-            alert("El texto no puede estar vacío.");
-            return;
-        }
-
-        const updatedPosts = posts.map(p =>
-            p.id === postId ? { ...p, text: editedText } : p
-        );
-        setPosts(updatedPosts);
-
-        const postRef = doc(db, "posts", post.id);
-        await updateDoc(postRef, {
-            text: editedText
-        }).catch(error => {
-            console.error("Error al actualizar la publicación en Firestore:", error);
-        });
-
+        await updatePost(postId, { text: editedText });
+        const updated = posts.map(p => p._id === postId || p.id === postId ? { ...p, text: editedText } : p);
+        setPosts(updated);
         setEditingPostId(null);
         setEditedText('');
     };

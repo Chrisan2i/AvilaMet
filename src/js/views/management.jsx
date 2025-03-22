@@ -1,21 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { isAuthenticated } from "../auth.js";
 import "../../styles/destination.css";
+
 const Management = () => {
   const navigate = useNavigate();
 
-  const goToManageGuides = () => {
-    navigate("/manage_guides");
-  };
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      alert("Debes iniciar sesión para acceder.");
+      navigate("/login");
+    }
+  }, [navigate]);
 
-  const goToManageExcursions = () => {
-    navigate("/manage_excursions");
-  };
-
-  const goToManageRoutes = () => {
-    navigate("/manage_routes");
-  };
+  const goToManageGuides = () => navigate("/manage_guides");
+  const goToManageExcursions = () => navigate("/manage_excursions");
+  const goToManageRoutes = () => navigate("/manage_routes");
 
   return (
     <div className="d-flex flex-column align-items-center" style={{ backgroundColor: "#fef9c3", padding: "50px" }}>
@@ -66,7 +66,7 @@ const Management = () => {
             letterSpacing: "1px",
             transition: "background-color 0.3s, transform 0.3s",
             marginBottom: "10px",
-             marginLeft: "10px"
+            marginLeft: "10px"
           }}
           onClick={goToManageExcursions}
           onMouseEnter={(e) => e.target.style.backgroundColor = "#e0e0a3"}

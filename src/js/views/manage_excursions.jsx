@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+    getExcursions,
+    createExcursion,
+    updateExcursion,
+    deleteExcursion,
+} from "../../api/excursions";
+import { getDestinations } from "../../api/destinations";
+import { getUsers } from "../../api/users";
 
 const ManageExcursions = () => {
     const [excursions, setExcursions] = useState([]);
@@ -8,7 +14,7 @@ const ManageExcursions = () => {
     const [guides, setGuides] = useState([]);
     const [showAddForm, setShowAddForm] = useState(false);
     const [editExcursionId, setEditExcursionId] = useState(null);
-    const [filterStatus, setFilterStatus] = useState("todos"); // Estado para el filtro
+    const [filterStatus, setFilterStatus] = useState("todos");
 
     const [newExcursion, setNewExcursion] = useState({
         nombre: "",
@@ -17,7 +23,7 @@ const ManageExcursions = () => {
         dificultad: "",
         destinoId: "",
         guiaId: "",
-        reservadoPor: "" // Inicialmente vacío
+        reservadoPor: ""
     });
 
     const [editExcursion, setEditExcursion] = useState(null);
@@ -28,36 +34,36 @@ const ManageExcursions = () => {
         fetchGuides();
     }, []);
 
-    // Cargar excursiones desde Firebase
     const fetchExcursions = async () => {
-        const querySnapshot = await getDocs(collection(db, "excursions"));
-        const excursionsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setExcursions(excursionsList);
+        try {
+            const data = await getExcursions();
+            setExcursions(data);
+        } catch (error) {
+            console.error("Error al cargar excursiones:", error);
+        }
     };
 
-    // Cargar destinos desde Firebase
     const fetchDestinations = async () => {
-        const querySnapshot = await getDocs(collection(db, "destinations"));
-        const destinationsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setDestinations(destinationsList);
+        try {
+            const data = await getDestinations();
+            setDestinations(data);
+        } catch (error) {
+            console.error("Error al cargar destinos:", error);
+        }
     };
 
-    // Cargar guías desde Firebase
     const fetchGuides = async () => {
         try {
-            const querySnapshot = await getDocs(collection(db, "users"));
-            const guidesList = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(user => user.rol && user.rol.toLowerCase() === "guía");
-
-            setGuides(guidesList);
+            const users = await getUsers();
+            const onlyGuides = users.filter((u) => u.rol?.toLowerCase() === "guía");
+            setGuides(onlyGuides);
         } catch (error) {
-            console.error("Error al obtener los guías:", error);
+            console.error("Error al cargar guías:", error);
         }
     };
 
     const handleInputChange = (e, setFunction) => {
-        setFunction(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        setFunction((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
     const handleAddExcursion = async (e) => {
@@ -67,25 +73,28 @@ const ManageExcursions = () => {
             return;
         }
 
-        // Crear la excursión con el campo reservadoPor vacío
-        await addDoc(collection(db, "excursions"), {
-            ...newExcursion,
-            reservadoPor: "" // Asegurarse de que esté vacío
-        });
-
-        // Reiniciar el formulario
-        setNewExcursion({ nombre: "", descripcion: "", fecha: "", dificultad: "", destinoId: "", guiaId: "", reservadoPor: "" });
-
-        setShowAddForm(false);
-        fetchExcursions();
+        try {
+            await createExcursion({ ...newExcursion, reservadoPor: "" });
+            setNewExcursion({
+                nombre: "",
+                descripcion: "",
+                fecha: "",
+                dificultad: "",
+                destinoId: "",
+                guiaId: "",
+                reservadoPor: ""
+            });
+            setShowAddForm(false);
+            fetchExcursions();
+        } catch (error) {
+            console.error("Error al agregar excursión:", error);
+        }
     };
 
     const handleDelete = async (id) => {
-        if (!id) return;
-
         try {
-            await deleteDoc(doc(db, "excursions", id));
-            setExcursions(prev => prev.filter(excursion => excursion.id !== id));
+            await deleteExcursion(id);
+            setExcursions((prev) => prev.filter((e) => e._id !== id && e.id !== id));
             alert("Excursión eliminada con éxito.");
         } catch (error) {
             console.error("Error al eliminar la excursión:", error);
@@ -94,7 +103,7 @@ const ManageExcursions = () => {
 
     const handleEdit = (excursion) => {
         setEditExcursion({ ...excursion });
-        setEditExcursionId(excursion.id);
+        setEditExcursionId(excursion._id || excursion.id);
         setShowAddForm(false);
     };
 
@@ -103,8 +112,7 @@ const ManageExcursions = () => {
         if (!editExcursionId) return;
 
         try {
-            const excursionRef = doc(db, "excursions", editExcursionId);
-            await updateDoc(excursionRef, editExcursion);
+            await updateExcursion(editExcursionId, editExcursion);
             setEditExcursionId(null);
             setEditExcursion(null);
             fetchExcursions();
@@ -114,11 +122,10 @@ const ManageExcursions = () => {
         }
     };
 
-    // Filtrar excursiones según el estado
-    const filteredExcursions = excursions.filter(excursion => {
-        if (filterStatus === "reservada") return excursion.reservadoPor;
-        if (filterStatus === "noReservada") return !excursion.reservadoPor;
-        return true; // "todos"
+    const filteredExcursions = excursions.filter((e) => {
+        if (filterStatus === "reservada") return e.reservadoPor;
+        if (filterStatus === "noReservada") return !e.reservadoPor;
+        return true;
     });
 
     return (

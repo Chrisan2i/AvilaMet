@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { db, auth } from "../firebase";
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import {
+    getUsers,
+    createUser,
+    deleteUser,
+    updateUser,
+} from "../../api/users"; // Asegúrate de tener estas funciones
 
 const Manage_Guides = () => {
     const [guides, setGuides] = useState([]);
@@ -25,17 +28,22 @@ const Manage_Guides = () => {
 
     const fetchGuides = async () => {
         try {
-            const q = query(collection(db, "users"), where("rol", "==", "Guía"));
-            const querySnapshot = await getDocs(q);
-            const guidesList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setGuides(guidesList);
+            const users = await getUsers();
+            const onlyGuides = users.filter((u) => u.rol === "Guía");
+            setGuides(onlyGuides);
         } catch (error) {
             console.error("Error obteniendo guías:", error);
         }
     };
 
     const validateInputs = () => {
-        if (!newGuide.nombre || !newGuide.apellido || !newGuide.email || !newGuide.nombre_usuario || !newGuide.contraseña) {
+        if (
+            !newGuide.nombre ||
+            !newGuide.apellido ||
+            !newGuide.email ||
+            !newGuide.nombre_usuario ||
+            !newGuide.contraseña
+        ) {
             setError("Todos los campos son obligatorios.");
             return false;
         }
@@ -51,25 +59,21 @@ const Manage_Guides = () => {
         if (!validateInputs()) return;
 
         try {
-            const auth = getAuth(); // Asegurarse de obtener la instancia de auth
-            const userCredential = await createUserWithEmailAndPassword(auth, newGuide.email, newGuide.contraseña);
-            const userId = userCredential.user.uid;
-
             const guideData = {
-                uid: userId,
                 nombre: newGuide.nombre,
                 apellido: newGuide.apellido,
                 email: newGuide.email,
                 telefono: newGuide.telefono,
                 nombre_usuario: newGuide.nombre_usuario,
+                contraseña: newGuide.contraseña,
                 rol: "Guía",
                 años_experiencia: Number(newGuide.años_experiencia),
-                idiomas: newGuide.idiomas.split(",").map(idioma => idioma.trim()),
-                fecha_creacion: new Date().toISOString().split('T')[0],
+                idiomas: newGuide.idiomas.split(",").map((i) => i.trim()),
+                fecha_creacion: new Date().toISOString(),
             };
 
-            await setDoc(doc(db, "users", userId), guideData);
-            setGuides([...guides, guideData]);
+            const created = await createUser(guideData);
+            setGuides([...guides, created]);
 
             setNewGuide({
                 nombre: "",
@@ -85,29 +89,41 @@ const Manage_Guides = () => {
             setShowForm(false);
             alert("✅ Guía agregado correctamente.");
         } catch (error) {
-            console.error("🚨 Error agregando guía:", error);
-            alert("❌ Error al registrar el guía: " + error.message);
+            console.error("Error agregando guía:", error);
+            alert("❌ Error al registrar el guía.");
         }
     };
 
     const updateGuide = async () => {
-        if (!editingGuide.nombre || !editingGuide.apellido || !editingGuide.email || !editingGuide.telefono) {
+        if (
+            !editingGuide.nombre ||
+            !editingGuide.apellido ||
+            !editingGuide.email ||
+            !editingGuide.telefono
+        ) {
             setError("Todos los campos son obligatorios.");
             return;
         }
 
         try {
-            const guideRef = doc(db, "users", editingGuide.id);
-            await updateDoc(guideRef, {
+            const updated = {
                 nombre: editingGuide.nombre,
                 apellido: editingGuide.apellido,
                 email: editingGuide.email,
                 telefono: editingGuide.telefono,
                 años_experiencia: Number(editingGuide.años_experiencia),
-                idiomas: editingGuide.idiomas.split(",").map(idioma => idioma.trim()),
-            });
+                idiomas: editingGuide.idiomas.split(",").map((i) => i.trim()),
+            };
 
-            setGuides(guides.map(guide => (guide.id === editingGuide.id ? editingGuide : guide)));
+            await updateUser(editingGuide._id || editingGuide.id, updated);
+
+            setGuides(
+                guides.map((guide) =>
+                    guide._id === editingGuide._id || guide.id === editingGuide.id
+                        ? { ...guide, ...updated }
+                        : guide
+                )
+            );
             setEditingGuide(null);
             alert("Guía actualizado correctamente.");
         } catch (error) {
@@ -117,8 +133,8 @@ const Manage_Guides = () => {
 
     const deleteGuide = async (id) => {
         try {
-            await deleteDoc(doc(db, "users", id));
-            setGuides(guides.filter(guide => guide.id !== id));
+            await deleteUser(id);
+            setGuides(guides.filter((g) => g._id !== id && g.id !== id));
         } catch (error) {
             console.error("Error eliminando guía:", error);
         }
@@ -138,17 +154,17 @@ const Manage_Guides = () => {
                 {showForm && (
                     <form
                         onSubmit={(e) => {
-                        e.preventDefault(); 
-                        addGuide(); 
+                            e.preventDefault();
+                            addGuide();
                         }}
                         style={{
-                        marginTop: "20px",
-                        backgroundColor: "#fff",
-                        padding: "20px",
-                        borderRadius: "8px",
-                        boxShadow: "0px 4px 8px rgba(0,0,0,0.1)",
-                        maxWidth: "400px",
-                        margin: "auto",
+                            marginTop: "20px",
+                            backgroundColor: "#fff",
+                            padding: "20px",
+                            borderRadius: "8px",
+                            boxShadow: "0px 4px 8px rgba(0,0,0,0.1)",
+                            maxWidth: "400px",
+                            margin: "auto",
                         }}
                     >
                         {/* Mensaje de error */}
@@ -156,141 +172,141 @@ const Manage_Guides = () => {
 
                         {/* Campos del formulario */}
                         <input
-                        type="text"
-                        placeholder="Nombre"
-                        value={newGuide.nombre}
-                        onChange={(e) => setNewGuide({ ...newGuide, nombre: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="text"
+                            placeholder="Nombre"
+                            value={newGuide.nombre}
+                            onChange={(e) => setNewGuide({ ...newGuide, nombre: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="text"
-                        placeholder="Apellido"
-                        value={newGuide.apellido}
-                        onChange={(e) => setNewGuide({ ...newGuide, apellido: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="text"
+                            placeholder="Apellido"
+                            value={newGuide.apellido}
+                            onChange={(e) => setNewGuide({ ...newGuide, apellido: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="email"
-                        placeholder="Correo"
-                        value={newGuide.email}
-                        onChange={(e) => setNewGuide({ ...newGuide, email: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="email"
+                            placeholder="Correo"
+                            value={newGuide.email}
+                            onChange={(e) => setNewGuide({ ...newGuide, email: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="password"
-                        placeholder="Contraseña (mínimo 6 caracteres)"
-                        value={newGuide.contraseña}
-                        onChange={(e) => setNewGuide({ ...newGuide, contraseña: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="password"
+                            placeholder="Contraseña (mínimo 6 caracteres)"
+                            value={newGuide.contraseña}
+                            onChange={(e) => setNewGuide({ ...newGuide, contraseña: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="text"
-                        placeholder="Teléfono"
-                        value={newGuide.telefono}
-                        onChange={(e) => setNewGuide({ ...newGuide, telefono: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="text"
+                            placeholder="Teléfono"
+                            value={newGuide.telefono}
+                            onChange={(e) => setNewGuide({ ...newGuide, telefono: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="text"
-                        placeholder="Nombre de Usuario"
-                        value={newGuide.nombre_usuario}
-                        onChange={(e) => setNewGuide({ ...newGuide, nombre_usuario: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="text"
+                            placeholder="Nombre de Usuario"
+                            value={newGuide.nombre_usuario}
+                            onChange={(e) => setNewGuide({ ...newGuide, nombre_usuario: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="number"
-                        placeholder="Años de Experiencia"
-                        value={newGuide.años_experiencia}
-                        onChange={(e) => setNewGuide({ ...newGuide, años_experiencia: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="number"
+                            placeholder="Años de Experiencia"
+                            value={newGuide.años_experiencia}
+                            onChange={(e) => setNewGuide({ ...newGuide, años_experiencia: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
                         <input
-                        type="text"
-                        placeholder="Idiomas (separados por coma)"
-                        value={newGuide.idiomas}
-                        onChange={(e) => setNewGuide({ ...newGuide, idiomas: e.target.value })}
-                        style={{
-                            marginBottom: "10px",
-                            padding: "10px",
-                            borderRadius: "5px",
-                            border: "1px solid #ddd",
-                            width: "100%",
-                        }}
-                        required
+                            type="text"
+                            placeholder="Idiomas (separados por coma)"
+                            value={newGuide.idiomas}
+                            onChange={(e) => setNewGuide({ ...newGuide, idiomas: e.target.value })}
+                            style={{
+                                marginBottom: "10px",
+                                padding: "10px",
+                                borderRadius: "5px",
+                                border: "1px solid #ddd",
+                                width: "100%",
+                            }}
+                            required
                         />
 
                         {/* Botón de guardar */}
                         <button
-                        type="submit"
-                        style={{
-                            marginTop: "10px",
-                            padding: "10px",
-                            backgroundColor: "#007bff",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "5px",
-                            cursor: "pointer",
-                            width: "100%",
-                        }}
+                            type="submit"
+                            style={{
+                                marginTop: "10px",
+                                padding: "10px",
+                                backgroundColor: "#007bff",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "5px",
+                                cursor: "pointer",
+                                width: "100%",
+                            }}
                         >
-                        Guardar Guía
+                            Guardar Guía
                         </button>
                     </form>
-                    )}
+                )}
 
                 {/* Lista de Guías */}
                 <div className="display-4 fw-bold text-custom-green"
-                    style={{ fontSize: "1rem", letterSpacing: '2px', marginTop: "20px"}}>
-                    <h3 style={{ color: "#fef9c3" , marginLeft: "10px"}}>Lista de Guías</h3>
+                    style={{ fontSize: "1rem", letterSpacing: '2px', marginTop: "20px" }}>
+                    <h3 style={{ color: "#fef9c3", marginLeft: "10px" }}>Lista de Guías</h3>
                     {guides.map(guide => (
                         <div key={guide.id} style={{ border: "1px solid #ddd", padding: "15px", marginLeft: "400px", backgroundColor: "#fff", borderRadius: "8px", width: "300px" }}>
                             <p><strong>{guide.nombre} {guide.apellido}</strong></p>

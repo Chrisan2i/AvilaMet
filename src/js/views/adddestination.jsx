@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { collection, addDoc } from "firebase/firestore";
-import { db } from "../firebase"; // Importar Firebase Firestore
 import { useNavigate } from "react-router-dom";
+import { createDestination } from "../../api/destinations"; // ✅ tu función API adaptada
 
 const AddDestination = () => {
     const navigate = useNavigate();
@@ -12,7 +11,7 @@ const AddDestination = () => {
         km: "",
         dificultad: "",
         tiempo: "",
-        fotos: [""], // Array para almacenar las URLs de imágenes
+        fotos: [""],
     });
 
     const handleChange = (e) => {
@@ -20,35 +19,32 @@ const AddDestination = () => {
         setNewDestination({ ...newDestination, [name]: value });
     };
 
-    // 🔥 Función para agregar una nueva URL de foto
     const handleAddPhotoField = () => {
         setNewDestination((prev) => ({
             ...prev,
-            fotos: [...prev.fotos, ""], // Agrega un campo vacío para una nueva URL
+            fotos: [...prev.fotos, ""],
         }));
     };
 
-    // 🔥 Función para actualizar la URL de una foto en el array
     const handlePhotoChange = (index, value) => {
         const updatedPhotos = [...newDestination.fotos];
         updatedPhotos[index] = value;
         setNewDestination({ ...newDestination, fotos: updatedPhotos });
     };
 
-    // 🔥 Función para eliminar una foto del array
     const handleRemovePhoto = (index) => {
         const updatedPhotos = newDestination.fotos.filter((_, i) => i !== index);
         setNewDestination({ ...newDestination, fotos: updatedPhotos });
     };
 
-    // 🔥 Función para guardar destino en Firestore
     const handleSaveDestination = async () => {
         try {
-            await addDoc(collection(db, "destinations"), newDestination);
+            await createDestination(newDestination);
             alert("Destino agregado correctamente ✅");
-            navigate("/"); // Redirigir de vuelta a destinos
+            navigate("/");
         } catch (error) {
             console.error("❌ Error al agregar destino:", error);
+            alert("Hubo un error al guardar el destino.");
         }
     };
 

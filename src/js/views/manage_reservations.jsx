@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
 import { useNavigate } from "react-router-dom";
+import {
+    getReservations,
+    deleteReservation,
+    updateReservation,
+} from "../../api/reservations";
+import { updateExcursion } from "../../api/excursions";
 
 const ManageReservations = () => {
     const [reservas, setReservas] = useState([]);
@@ -13,38 +17,46 @@ const ManageReservations = () => {
         fetchReservas();
     }, []);
 
-    // Cargar todas las reservas desde Firebase
     const fetchReservas = async () => {
-        const querySnapshot = await getDocs(collection(db, "reservas"));
-        const reservasList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setReservas(reservasList);
+        try {
+            const data = await getReservations();
+            setReservas(data);
+        } catch (error) {
+            console.error("Error al obtener reservas:", error);
+        }
     };
 
-    // Cambiar la fecha de una reserva
     const handleChangeDate = async (id, newDate) => {
-        const reservationRef = doc(db, "reservas", id);
-        await updateDoc(reservationRef, { fecha: newDate }); // Actualizar la fecha de la reserva
-        fetchReservas(); // Refrescar la lista de reservas
-        alert("Fecha de la reserva actualizada exitosamente");
+        try {
+            await updateReservation(id, { fecha: newDate });
+            fetchReservas();
+            alert("Fecha de la reserva actualizada exitosamente");
+        } catch (error) {
+            console.error("Error al actualizar fecha:", error);
+        }
     };
 
-    // Eliminar una reserva
     const handleDeleteReservation = async (id) => {
         try {
-            await deleteDoc(doc(db, "reservas", id));
-            setReservas((prev) => prev.filter((reservation) => reservation.id !== id));
+            await deleteReservation(id);
+            setReservas((prev) => prev.filter((r) => r._id !== id && r.id !== id));
             alert("Reserva eliminada exitosamente");
         } catch (error) {
             console.error("Error al eliminar la reserva:", error);
         }
     };
 
-    // Quitar la reserva de la excursión
     const handleRemoveReservationFromExcursion = async (excursionId) => {
-        const excursionRef = doc(db, "excursions", excursionId);
-        await updateDoc(excursionRef, { reservadoPor: "", fechaReserva: "" }); // Eliminar la reserva
-        fetchReservas(); // Refrescar la lista de reservas
-        alert("Reserva eliminada de la excursión exitosamente");
+        try {
+            await updateExcursion(excursionId, {
+                reservadoPor: "",
+                fechaReserva: ""
+            });
+            alert("Reserva eliminada de la excursión exitosamente");
+            fetchReservas();
+        } catch (error) {
+            console.error("Error al quitar reserva de excursión:", error);
+        }
     };
 
     return (

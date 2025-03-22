@@ -1,35 +1,23 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { isAuthenticated } from "../auth.js";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase"; // Importar Firebase correctamente
+import { getUserById } from "../../api/users";
+import { getDestinations } from "../../api/destinations";
 
 const Destination = () => {
   const navigate = useNavigate();
   const [userRole, setUserRole] = useState(null);
-  const [destinations, setDestinations] = useState([]); // Estado para almacenar los destinos
+  const [destinations, setDestinations] = useState([]);
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      if (auth.currentUser) {
+      const userId = localStorage.getItem("userId");
+      if (userId) {
         try {
-          console.log("🔍 Buscando rol en Firestore...");
-          const userDocRef = doc(db, "users", auth.currentUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
-
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setUserRole(userData.role || "Excursionista");
-            console.log("✅ Rol obtenido:", userData.role);
-          } else {
-            console.log("❌ No se encontró el usuario en Firestore.");
-          }
+          const user = await getUserById(userId);
+          setUserRole(user.rol || "Excursionista");
         } catch (error) {
-          console.error("🚨 Error al obtener el rol del usuario:", error);
+          console.error("Error al obtener rol:", error);
         }
-      } else {
-        console.log("⚠️ Usuario no autenticado.");
-        setUserRole(null);
       }
     };
 
@@ -37,30 +25,24 @@ const Destination = () => {
   }, []);
 
   useEffect(() => {
-    const fetchDestinations = async () => {
+    const fetchDestinos = async () => {
       try {
-        console.log("📥 Cargando destinos desde Firestore...");
-        const querySnapshot = await getDocs(collection(db, "destinations"));
-        const destinationsList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setDestinations(destinationsList);
-        console.log("✅ Destinos cargados:", destinationsList);
+        const data = await getDestinations();
+        setDestinations(data);
       } catch (error) {
-        console.error("❌ Error al obtener destinos:", error);
+        console.error("Error al cargar destinos:", error);
       }
     };
 
-    fetchDestinations();
+    fetchDestinos();
   }, []);
 
-
-  // Redirigir a la página de agregar destinos
   const goToAddDestination = () => navigate("/adddestination");
   const goToGallery = () => navigate("/gallery");
+
   const goToReservations = () => {
-    if (isAuthenticated()) {
+    const userId = localStorage.getItem("userId");
+    if (userId) {
       navigate("/reservation");
     } else {
       alert("Debes iniciar sesión para hacer una reservación.");

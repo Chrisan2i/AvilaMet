@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { db, auth } from "../firebase"; // Importar Firebase
-import axios from "axios"; // Importar Axios para la subida de imágenes
-import { onAuthStateChanged } from "firebase/auth";
+import axios from "axios";
+import { getUserById, updateUser } from "../../api/users";
+import { getPostsByUserId, updatePost } from "../../api/posts";
 
 const Profile = () => {
     const [userData, setUserData] = useState(null);
@@ -17,56 +16,40 @@ const Profile = () => {
     });
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                console.error("No hay usuario autenticado.");
-                return;
-            }
+        const fetchUser = async () => {
+            const userId = localStorage.getItem("userId");
+            if (!userId) return;
 
             try {
-                const userRef = doc(db, "users", user.uid);
-                const userSnap = await getDoc(userRef);
-
-                if (userSnap.exists()) {
-                    const userData = userSnap.data();
-                    setUserData(userData);
-                    setEditedData({
-                        nombre: userData.nombre || "",
-                        apellido: userData.apellido || "",
-                        email: userData.email || "",
-                        telefono: userData.telefono || "",
-                        fotoPerfil: userData.fotoPerfil || ""
-                    });
-                } else {
-                    console.warn("No se encontraron datos del usuario.");
-                }
+                const user = await getUserById(userId);
+                setUserData(user);
+                setEditedData({
+                    nombre: user.nombre || "",
+                    apellido: user.apellido || "",
+                    email: user.email || "",
+                    telefono: user.telefono || "",
+                    fotoPerfil: user.fotoPerfil || ""
+                });
             } catch (error) {
                 console.error("Error al obtener datos del usuario:", error);
             }
-        });
+        };
 
-        return () => unsubscribe(); // Limpiar listener
+        fetchUser();
     }, []);
 
-    const handleEditToggle = () => {
-        setIsEditing(!isEditing);
-    };
+    const handleEditToggle = () => setIsEditing(!isEditing);
 
     const handleChange = (e) => {
         setEditedData({ ...editedData, [e.target.name]: e.target.value });
     };
 
     const handleSaveChanges = async () => {
-        const user = auth.currentUser;
-        if (!user) {
-            console.error("No hay usuario autenticado.");
-            return;
-        }
+        const userId = localStorage.getItem("userId");
+        if (!userId) return;
 
         try {
-            const userRef = doc(db, "users", user.uid);
-            await updateDoc(userRef, editedData);
-
+            const updated = await updateUser(userId, editedData);
             setUserData((prev) => ({ ...prev, ...editedData }));
             setIsEditing(false);
         } catch (error) {
@@ -76,18 +59,12 @@ const Profile = () => {
 
     const updateUserPhotoInPosts = async (userId, newPhotoUrl) => {
         try {
-            const postsRef = collection(db, "posts");
-            const q = query(postsRef, where("userId", "==", userId));
-            const querySnapshot = await getDocs(q);
-
-            querySnapshot.forEach(async (postDoc) => {
-                const postRef = doc(db, "posts", postDoc.id);
-                await updateDoc(postRef, { userPhoto: newPhotoUrl });
-            });
-
-            console.log("Foto de perfil actualizada en todos los posts.");
+            const posts = await getPostsByUserId(userId);
+            await Promise.all(posts.map((post) =>
+                updatePost(post._id || post.id, { userPhoto: newPhotoUrl })
+            ));
         } catch (error) {
-            console.error("Error al actualizar la foto de perfil en los posts:", error);
+            console.error("Error al actualizar foto en los posts:", error);
         }
     };
 
@@ -98,33 +75,29 @@ const Profile = () => {
         setUploading(true);
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("upload_preset", "mi_preset"); // Reemplaza con tu preset en Cloudinary
+        formData.append("upload_preset", "mi_preset"); // <-- tu preset de Cloudinary
 
         try {
             const response = await axios.post(
-                "https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", // Reemplaza TU_CLOUD_NAME con tu Cloudinary Name
+                "https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", // <-- tu Cloud name
                 formData
             );
 
             const imageUrl = response.data.secure_url;
+            const userId = localStorage.getItem("userId");
 
-            const user = auth.currentUser;
-            if (user) {
-                const userRef = doc(db, "users", user.uid);
-                await updateDoc(userRef, { fotoPerfil: imageUrl });
+            await updateUser(userId, { fotoPerfil: imageUrl });
+            setUserData((prev) => ({ ...prev, fotoPerfil: imageUrl }));
+            setEditedData((prev) => ({ ...prev, fotoPerfil: imageUrl }));
 
-                setUserData((prev) => ({ ...prev, fotoPerfil: imageUrl }));
-                setEditedData((prev) => ({ ...prev, fotoPerfil: imageUrl }));
-
-                // Actualizar la foto de perfil en todos los posts del usuario
-                await updateUserPhotoInPosts(user.uid, imageUrl);
-            }
+            await updateUserPhotoInPosts(userId, imageUrl);
         } catch (error) {
-            console.error("Error al subir la imagen:", error);
+            console.error("Error al subir imagen:", error);
         }
 
         setUploading(false);
     };
+
 
     return (
         <div className="profile d-flex flex-column align-items-center"
