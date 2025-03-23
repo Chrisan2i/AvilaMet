@@ -1,18 +1,31 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const UserSchema = new mongoose.Schema({
-  id: String,
-  nombre: String,
-  apellido: String,
-  email: String,
-  telefono: String,
-  nombre_usuario: String,
-  contraseña: String,
-  rol: String, // "Excursionista" o "Guía" o "Admin"
-  años_experiencia: Number,
-  idiomas: [String],
-  fecha_creacion: String,
-  fotoPerfil: String // opcional
-});
+const userSchema = new mongoose.Schema({
+	nombre: String,
+	apellido: String,
+	email: String,
+	telefono: String,
+	nombre_usuario: String,
+	contraseña: String,
+	rol: { type: String, default: "Excursionista" },
+	fecha_creacion: Date,
+	fotoPerfil: String,
+	
+	idiomas: {
+	  type: [String],
+	  required: function () {
+		return this.rol === "Guía";
+	  }
+	},
+  
+	años_experiencia: {
+	  type: Number,
+	  required: function () {
+		return this.rol === "Guía";
+	  }
+	}
+  });
+  
 
-module.exports = mongoose.model('User', UserSchema);
+// 👇 ESTA LÍNEA ES CLAVE
+module.exports = mongoose.model("User", userSchema); // ✅ usa colección "users"

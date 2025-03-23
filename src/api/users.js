@@ -13,8 +13,8 @@ export const createUser = async (user) => {
 };
 
 export const getUserById = async (id) => {
-  const res = await axios.get(`${API_URL}/${id}`);
-  return res.data;
+	const res = await axios.get(`${API_URL}/${id}`);
+	return res.data;
 };
 
 export const updateUser = async (id, user) => {
@@ -26,3 +26,4 @@ export const deleteUser = async (id) => {
 	const res = await axios.delete(`${API_URL}/${id}`);
 	return res.data;
 };
+
