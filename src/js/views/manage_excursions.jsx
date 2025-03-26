@@ -22,6 +22,9 @@ const ManageExcursions = () => {
     const [destinations, setDestinations] = useState([]);
     const [guides, setGuides] = useState([]);
 
+    // 🟢 Fecha de hoy
+    const today = new Date().toISOString().split("T")[0];
+
     // 🟢 Cargar datos iniciales
     useEffect(() => {
         const fetchData = async () => {
@@ -42,7 +45,6 @@ const ManageExcursions = () => {
             try {
                 const users = await getUsers();
                 const onlyGuides = users.filter(user => user.rol === "Guía");
-                console.log("✅ Guías cargados:", onlyGuides);
                 setGuides(onlyGuides);
             } catch (error) {
                 console.error("❌ Error al obtener los guías:", error);
@@ -80,6 +82,12 @@ const ManageExcursions = () => {
     // ➕ Agregar excursión
     const handleAddExcursion = async (e) => {
         e.preventDefault();
+
+        if (newExcursion.fecha < today) {
+            alert("La fecha no puede ser anterior a hoy.");
+            return;
+        }
+
         try {
             await addExcursion(newExcursion);
             const updated = await getExcursions();
@@ -102,6 +110,11 @@ const ManageExcursions = () => {
     const handleUpdateExcursion = async (e) => {
         e.preventDefault();
         if (!editExcursionId) return;
+
+        if (editExcursion.fecha < today) {
+            alert("La fecha no puede ser anterior a hoy.");
+            return;
+        }
 
         try {
             await updateExcursion(editExcursionId, editExcursion);
@@ -216,19 +229,19 @@ const ManageExcursions = () => {
                         maxWidth: "400px",
                         margin: "auto",
                     }}>
-                        <input type="text" name="nombre" placeholder="Nombre de la ruta" value={newExcursion.nombre} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <textarea name="descripcion" placeholder="Descripción de la ruta" value={newExcursion.descripcion} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <input type="date" name="fecha" value={newExcursion.fecha} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <input type="text" name="dificultad" placeholder="Dificultad" value={newExcursion.dificultad} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="text" name="nombre" placeholder="Nombre de la ruta" value={newExcursion.nombre || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <textarea name="descripcion" placeholder="Descripción de la ruta" value={newExcursion.descripcion || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="date" name="fecha" value={newExcursion.fecha || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required min={today} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="text" name="dificultad" placeholder="Dificultad" value={newExcursion.dificultad || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
 
-                        <select name="destinoId" value={newExcursion.destinoId} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
+                        <select name="destinoId" value={newExcursion.destinoId || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
                             <option value="">Seleccione un destino</option>
                             {destinations.map(destino => (
                                 <option key={destino._id || destino.id} value={destino._id || destino.id}>{destino.nombre}</option>
                             ))}
                         </select>
 
-                        <select name="guiaId" value={newExcursion.guiaId} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
+                        <select name="guiaId" value={newExcursion.guiaId || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
                             <option value="">Seleccione un guía</option>
                             {guides.map(guia => (
                                 <option key={guia._id} value={guia._id}>{guia.nombre} - {guia.años_experiencia} años</option>
@@ -259,19 +272,19 @@ const ManageExcursions = () => {
                         maxWidth: "400px",
                         margin: "auto",
                     }}>
-                        <input type="text" name="nombre" placeholder="Nombre de la ruta" value={editExcursion.nombre} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <textarea name="descripcion" placeholder="Descripción de la ruta" value={editExcursion.descripcion} onChange={(e) => handleInputChange(e, setEditExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <input type="date" name="fecha" value={editExcursion.fecha} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
-                        <input type="text" name="dificultad" placeholder="Dificultad" value={editExcursion.dificultad} onChange={(e) => handleInputChange(e, setEditExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="text" name="nombre" placeholder="Nombre de la ruta" value={editExcursion.nombre || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <textarea name="descripcion" placeholder="Descripción de la ruta" value={editExcursion.descripcion || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="date" name="fecha" value={editExcursion.fecha || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} required min={today} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="text" name="dificultad" placeholder="Dificultad" value={editExcursion.dificultad || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
 
-                        <select name="destinoId" value={editExcursion.destinoId} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
+                        <select name="destinoId" value={editExcursion.destinoId || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
                             <option value="">Seleccione un destino</option>
                             {destinations.map(destino => (
                                 <option key={destino._id || destino.id} value={destino._id || destino.id}>{destino.nombre}</option>
                             ))}
                         </select>
 
-                        <select name="guiaId" value={editExcursion.guiaId} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
+                        <select name="guiaId" value={editExcursion.guiaId || ""} onChange={(e) => handleInputChange(e, setEditExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }}>
                             <option value="">Seleccione un guía</option>
                             {guides.map(guia => (
                                 <option key={guia._id} value={guia._id}>{guia.nombre} - {guia.años_experiencia} años</option>

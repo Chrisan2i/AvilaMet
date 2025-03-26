@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createDestination } from "../../api/destinations"; // ✅ tu función API adaptada
+import { createDestination } from "../../api/destinations";
+import axios from "axios";
 
 const AddDestination = () => {
     const navigate = useNavigate();
+    const [uploading, setUploading] = useState(false);
     const [newDestination, setNewDestination] = useState({
         nombre: "",
         descripcion: "",
@@ -11,7 +13,7 @@ const AddDestination = () => {
         km: "",
         dificultad: "",
         tiempo: "",
-        fotos: [""],
+        fotos: [],
     });
 
     const handleChange = (e) => {
@@ -19,17 +21,35 @@ const AddDestination = () => {
         setNewDestination({ ...newDestination, [name]: value });
     };
 
-    const handleAddPhotoField = () => {
-        setNewDestination((prev) => ({
-            ...prev,
-            fotos: [...prev.fotos, ""],
-        }));
-    };
+    const handleImageUpload = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length + newDestination.fotos.length > 3) {
+            alert("Solo puedes subir un máximo de 3 imágenes.");
+            return;
+        }
 
-    const handlePhotoChange = (index, value) => {
-        const updatedPhotos = [...newDestination.fotos];
-        updatedPhotos[index] = value;
-        setNewDestination({ ...newDestination, fotos: updatedPhotos });
+        setUploading(true);
+        try {
+            const uploadPromises = files.map(async (file) => {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("upload_preset", "mi_preset"); // 🔁 Reemplaza con tu preset
+                const res = await axios.post(
+                    "https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", // 🔁 Reemplaza con tu cloud name
+                    formData
+                );
+                return res.data.secure_url;
+            });
+
+            const uploadedUrls = await Promise.all(uploadPromises);
+            setNewDestination((prev) => ({
+                ...prev,
+                fotos: [...prev.fotos, ...uploadedUrls],
+            }));
+        } catch (error) {
+            console.error("Error al subir imágenes:", error);
+        }
+        setUploading(false);
     };
 
     const handleRemovePhoto = (index) => {
@@ -52,10 +72,8 @@ const AddDestination = () => {
         <div className="container mt-4">
             <h2 className="text-center mb-4">Agregar Nuevo Destino</h2>
 
-            {/* Contenedor de inputs */}
             <div className="d-flex align-items-center justify-content-center">
                 <div>
-                    {/* Inputs con estados */}
                     <input
                         className="d-flex flex-column inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                         style={{ flex: 1, marginRight: "20px" }}
@@ -111,34 +129,41 @@ const AddDestination = () => {
                         placeholder="Tiempo estimado (ej: 1h 30min)"
                     />
 
-                    {/* 🔥 Sección para agregar imágenes (URLs) */}
+                    {/* 🔥 NUEVA sección para subir imágenes a Cloudinary */}
                     <h5 className="mt-4">Imágenes del Destino</h5>
-                    {newDestination.fotos.map((foto, index) => (
-                        <div key={index} className="d-flex align-items-center">
-                            <input
-                                className="d-flex flex-column inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
-                                style={{ flex: 1, marginRight: "10px" }}
-                                type="text"
-                                value={foto}
-                                onChange={(e) => handlePhotoChange(index, e.target.value)}
-                                placeholder="URL de la imagen"
-                            />
-                            <button
-                                className="btn btn-danger"
-                                onClick={() => handleRemovePhoto(index)}
-                                style={{ fontSize: "14px", padding: "5px 10px" }}
-                            >
-                                ❌
-                            </button>
-                        </div>
-                    ))}
-                    <button
-                        className="btn btn-secondary mt-2"
-                        onClick={handleAddPhotoField}
-                        style={{ fontSize: "14px", padding: "5px 10px" }}
-                    >
-                        ➕ Agregar otra imagen
-                    </button>
+
+                    <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="form-control mb-2"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                    />
+
+                    <div className="mt-2 d-flex flex-wrap gap-2">
+                        {newDestination.fotos.map((foto, index) => (
+                            <div key={index} className="position-relative">
+                                <img
+                                    src={foto}
+                                    alt={`Imagen ${index + 1}`}
+                                    style={{
+                                        width: "100px",
+                                        height: "100px",
+                                        objectFit: "cover",
+                                        borderRadius: "8px",
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-danger position-absolute top-0 end-0"
+                                    onClick={() => handleRemovePhoto(index)}
+                                >
+                                    ✖
+                                </button>
+                            </div>
+                        ))}
+                    </div>
 
                     {/* Botones de acción */}
                     <div className="d-flex justify-content-between mt-3">

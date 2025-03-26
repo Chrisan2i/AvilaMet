@@ -1,7 +1,7 @@
 import React, { useState, useContext } from "react";
 import { Context } from "../store/appContext";
 import { useNavigate } from "react-router-dom";
-import { getUsers, createUser } from "../../api/users"; // 👈 API que conecta con Mongo
+import { getUsers, createUser } from "../../api/users";
 import "../../styles/login.css";
 
 const Login = () => {
@@ -66,7 +66,6 @@ const Login = () => {
         }
     };
 
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setError("");
@@ -97,20 +96,8 @@ const Login = () => {
         setError("Funcionalidad de recuperación aún no implementada en Mongo.");
     };
 
-    const handleGoogleLogin = () => {
-        setError("Inicio con Google no disponible sin Firebase.");
-    };
-
-    const handleFacebookLogin = () => {
-        setError("Inicio con Facebook no disponible sin Firebase.");
-    };
-
-    // ⛔ NO TOCAMOS TU HTML ⛔
-    // ... (todo el return JSX lo dejas exactamente igual como ya lo tienes)
-
     return (
         <div className="w-100 bg-custom-yellow">
-            {/* Bienvenida e imagen */}
             <div className="container">
                 <div className="row">
                     <div className="col-12 col-md-5 d-flex flex-column align-items-center mt-5">
@@ -124,7 +111,6 @@ const Login = () => {
                             style={{ height: '400px', width: '400px' }}
                         />
                     </div>
-                    {/* Formulario de inicio de sesión */}
                     <div className="col-12 col-md-7 mt-5">
                         <div className="container bg-inputs borde container-width">
                             <nav className="fs-3 d-flex justify-content-center borde p-3" style={{ backgroundColor: '#fef9c3' }}>
@@ -192,7 +178,7 @@ const Login = () => {
                                             <button
                                                 className="btn btn-link"
                                                 style={{ textDecoration: 'none', color: '#007bff', marginTop: '10px' }}
-                                                onClick={() => setIsResettingPassword(false)} // Volver al inicio de sesión
+                                                onClick={() => setIsResettingPassword(false)}
                                             >
                                                 Volver al inicio de sesión
                                             </button>
@@ -226,45 +212,13 @@ const Login = () => {
                                             >
                                                 Iniciar sesión
                                             </button>
-
-                                            {/* Botón de continuar con Google y Facebook */}
-                                            <div className="container d-flex flex-column align-items-center mb-4 mt-3 text-custom-green"
-                                                style={{
-                                                    letterSpacing: '1px',
-                                                    fontSize: '1rem',
-                                                }}>
-                                                <h5>--CONTINUAR CON--</h5>
-                                                <div className="iconos d-flex justify-content-center">
-                                                    <button onClick={handleGoogleLogin}
-                                                        className="btn-social"
-                                                        style={{ background: 'transparent', border: 'none', marginRight: '10px' }}>
-                                                        <img
-                                                            className="icono-login"
-                                                            src="https://res.cloudinary.com/dntc8trob/image/upload/v1740431278/pngwing.com_5_xlprpf.png"
-                                                            alt="Google login"
-                                                            style={{ width: '50px', height: '50px' }}
-                                                        />
-                                                    </button>
-                                                    <button onClick={handleFacebookLogin}
-                                                        className="btn-social"
-                                                        style={{ background: 'transparent', border: 'none' }}>
-                                                        <img
-                                                            className="icono-login2"
-                                                            src="https://res.cloudinary.com/dntc8trob/image/upload/v1740431488/pngwing.com_6_jgwllf.png"
-                                                            alt="Facebook login"
-                                                            style={{ width: '50px', height: '50px' }}
-                                                        />
-                                                    </button>
-                                                </div>
-                                            </div>
                                         </form>
 
-                                        {/* Enlace para restablecer la contraseña */}
                                         <div className="text-center mt-3">
                                             <button
                                                 className="btn btn-link"
                                                 style={{ textDecoration: 'none', color: '#007bff' }}
-                                                onClick={() => setIsResettingPassword(true)} // Cambiar el estado para mostrar el formulario de restablecimiento
+                                                onClick={() => setIsResettingPassword(true)}
                                             >
                                                 ¿Olvidaste tu contraseña?
                                             </button>
@@ -272,102 +226,71 @@ const Login = () => {
                                     </div>
                                 )}
 
-
-                                {/* Validación, input, correo y contraseña - registro */}
                                 {!isLogin && !isResettingPassword && (
                                     <div className="tab-pane fade show active" id="nav-profile">
                                         <form onSubmit={handleRegister} className="d-flex flex-column align-items-center">
                                             <input
                                                 className="form-control form-control-lg mb-2 inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="text"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Nombre"
-                                                aria-label="Nombre"
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg mb-2 text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="text"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Apellido"
-                                                aria-label="Apellido"
                                                 value={lastName}
                                                 onChange={(e) => setLastName(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg mb-2 text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="email"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Correo"
-                                                aria-label="Correo"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg mb-2 text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="tel"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Teléfono"
-                                                aria-label="Teléfono"
                                                 value={phone}
                                                 onChange={(e) => setPhone(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg mb-2 text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="text"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Nombre de usuario"
-                                                aria-label="Nombre de usuario"
                                                 value={username}
                                                 onChange={(e) => setUsername(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg mb-2 text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="password"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Contraseña"
-                                                aria-label="Contraseña"
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                             />
                                             <input
                                                 className="form-control form-control-lg text-dark inputs-width borde-input text-custom-paragraph2 placeholder-custom input-yellow"
                                                 type="password"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1rem',
-                                                }}
+                                                style={{ letterSpacing: '2px', fontSize: '1rem' }}
                                                 placeholder="Confirma contraseña"
-                                                aria-label="Confirma contraseña"
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                             />
                                             {error && <p className="text-danger">{error}</p>}
-                                            <button className="btn bg-custom-green button-width mt-3 text-custom-green2 placeholder-custom btn-hover"
+                                            <button
+                                                className="btn bg-custom-green button-width mt-3 text-custom-green2 placeholder-custom btn-hover"
                                                 type="submit"
-                                                style={{
-                                                    letterSpacing: '2px',
-                                                    fontSize: '1.2rem',
-                                                }}>
+                                                style={{ letterSpacing: '2px', fontSize: '1.2rem' }}
+                                            >
                                                 Crear cuenta
                                             </button>
                                         </form>
@@ -381,7 +304,6 @@ const Login = () => {
             </div>
         </div>
     );
-
 };
 
 export default Login;

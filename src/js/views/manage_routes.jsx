@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import {
     getDestinations,
     updateDestination,
@@ -9,6 +10,7 @@ const ManageRoutes = () => {
     const [destinations, setDestinations] = useState([]);
     const [editingDestination, setEditingDestination] = useState(null);
     const [editForm, setEditForm] = useState(null);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         const fetchDestinations = async () => {
@@ -46,6 +48,46 @@ const ManageRoutes = () => {
         setEditForm({ ...editForm, [name]: value });
     };
 
+    const handleImageChange = async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length + (editForm.fotos?.length || 0) > 3) {
+            alert("Solo se permiten máximo 3 imágenes.");
+            return;
+        }
+
+        setUploading(true);
+
+        try {
+            const uploadPromises = files.map(async (file) => {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("upload_preset", "mi_preset"); // 🔁 Reemplaza con tu preset
+                const response = await axios.post(
+                    "https://api.cloudinary.com/v1_1/dhlyuaknz/image/upload", // 🔁 Reemplaza con tu cloud name
+                    formData
+                );
+                return response.data.secure_url;
+            });
+
+            const uploadedUrls = await Promise.all(uploadPromises);
+            setEditForm({
+                ...editForm,
+                fotos: [...(editForm.fotos || []), ...uploadedUrls]
+            });
+        } catch (error) {
+            console.error("Error al subir imagen:", error);
+        }
+
+        setUploading(false);
+    };
+
+    const handleRemoveImage = (indexToRemove) => {
+        setEditForm({
+            ...editForm,
+            fotos: editForm.fotos.filter((_, i) => i !== indexToRemove)
+        });
+    };
+
     const handleSaveChanges = async () => {
         try {
             await updateDestination(editingDestination, editForm);
@@ -66,7 +108,6 @@ const ManageRoutes = () => {
                     style={{ fontSize: "3rem", letterSpacing: '2px' }}
                 >Gestionar Destinos</h2>
 
-                {/* Modo edición */}
                 {editingDestination ? (
                     <div className="card p-4 shadow">
                         <h3 className="text-center">Editar Destino</h3>
@@ -118,21 +159,49 @@ const ManageRoutes = () => {
                             placeholder="Tiempo estimado (ej: 1h 30min)"
                         />
 
-                        {/* Botones de acción */}
+                        {/* Carga y previsualización de imágenes */}
+                        <div className="mb-2">
+                            <label className="form-label">Imágenes (máx 3):</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="form-control"
+                                onChange={handleImageChange}
+                                disabled={uploading}
+                            />
+                            <div className="mt-2 d-flex flex-wrap gap-2">
+                                {editForm.fotos?.map((foto, index) => (
+                                    <div key={index} className="position-relative">
+                                        <img
+                                            src={foto}
+                                            alt={`Imagen ${index + 1}`}
+                                            style={{ width: "100px", height: "100px", objectFit: "cover", borderRadius: "8px" }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-danger position-absolute top-0 end-0"
+                                            onClick={() => handleRemoveImage(index)}
+                                        >
+                                            ✖
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="d-flex justify-content-between mt-3">
                             <button className="btn btn-success" onClick={handleSaveChanges}>Guardar Cambios</button>
                             <button className="btn btn-secondary" onClick={() => setEditingDestination(null)}>Cancelar</button>
                         </div>
                     </div>
                 ) : (
-                    // Lista de destinos
                     destinations.length === 0 ? (
                         <h3 className="text-center">No hay destinos disponibles.</h3>
                     ) : (
                         destinations.map((destino) => (
                             <div key={destino.id} className="card mb-3 shadow">
                                 <div className="row g-0">
-                                    {/* Imagen del destino */}
                                     <div className="col-md-4">
                                         {destino.fotos?.length > 0 && (
                                             <img
@@ -143,8 +212,6 @@ const ManageRoutes = () => {
                                             />
                                         )}
                                     </div>
-
-                                    {/* Detalles del destino */}
                                     <div className="col-md-8">
                                         <div className="card-body">
                                             <h3 className="card-title">{destino.nombre}</h3>
@@ -155,15 +222,12 @@ const ManageRoutes = () => {
                                                 <strong> Dificultad:</strong> {destino.dificultad} |
                                                 <strong> Tiempo:</strong> {destino.tiempo}
                                             </p>
-
-                                            {/* Botones de Editar y Eliminar */}
                                             <button
                                                 className="btn btn-warning me-2"
                                                 onClick={() => handleEdit(destino)}
                                             >
                                                 ✏️ Editar
                                             </button>
-
                                             <button
                                                 className="btn btn-danger"
                                                 onClick={() => handleDelete(destino.id)}
