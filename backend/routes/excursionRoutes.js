@@ -4,13 +4,19 @@ const Excursion = require('../models/Excursion');
 
 // Obtener todas las excursiones
 router.get('/', async (req, res) => {
-	try {
-		const excursiones = await Excursion.find();
-		res.json(excursiones);
-	} catch (err) {
-		res.status(500).json({ message: err.message });
-	}
+    try {
+        const excursiones = await Excursion.find().lean();
+
+        const disponibles = excursiones.filter(exc =>
+            !exc.maxPersonas || (exc.reservadoPor?.length || 0) < exc.maxPersonas
+        );
+
+        res.json(disponibles);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
+
 
 // Crear excursión
 router.post('/', async (req, res) => {

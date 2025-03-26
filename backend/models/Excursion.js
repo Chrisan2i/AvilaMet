@@ -4,9 +4,11 @@ const ExcursionSchema = new mongoose.Schema({
   nombre: String,
   fecha: String,
   dificultad: String,
-  guia: String, // nombre del guía
+  guia: String,
   guiaId: String,
-  reservadoPor: String // idReserva si fue reservada
+  reservadoPor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  maxPersonas: Number 
 });
+
 
 module.exports = mongoose.model('Excursion', ExcursionSchema);

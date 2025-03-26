@@ -11,7 +11,6 @@ router.get('/', async (req, res) => {
 		res.status(500).json({ message: err.message });
 	}
 });
-
 // 👉 POST /api/destinations - crear uno nuevo
 router.post('/', async (req, res) => {
 	try {
@@ -22,7 +21,6 @@ router.post('/', async (req, res) => {
 		res.status(400).json({ message: err.message });
 	}
 });
-
 // 👉 PUT /api/destinations/:id - editar destino
 router.put('/:id', async (req, res) => {
 	try {

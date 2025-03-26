@@ -5,55 +5,75 @@ import {
     deleteReservation,
     updateReservation,
 } from "../../api/reservations";
-import { updateExcursion } from "../../api/excursions";
+import {
+    getExcursions,
+    updateExcursion,
+} from "../../api/excursions";
 
 const ManageReservations = () => {
     const [reservas, setReservas] = useState([]);
+    const [excursiones, setExcursiones] = useState([]);
     const [editingReservation, setEditingReservation] = useState(null);
     const [editingDate, setEditingDate] = useState("");
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchReservas();
+        fetchData();
     }, []);
 
-    const fetchReservas = async () => {
+    const fetchData = async () => {
         try {
             const data = await getReservations();
+            const excursionesData = await getExcursions();
             setReservas(data);
+            setExcursiones(excursionesData);
         } catch (error) {
-            console.error("Error al obtener reservas:", error);
+            console.error("Error al obtener datos:", error);
         }
     };
 
     const handleChangeDate = async (id, newDate) => {
         try {
             await updateReservation(id, { fecha: newDate });
-            fetchReservas();
+            fetchData();
             alert("Fecha de la reserva actualizada exitosamente");
         } catch (error) {
             console.error("Error al actualizar fecha:", error);
         }
     };
 
-    const handleDeleteReservation = async (id) => {
+    const handleDeleteReservation = async (reservationId) => {
         try {
-            await deleteReservation(id);
-            setReservas((prev) => prev.filter((r) => r._id !== id && r.id !== id));
+            const reserva = reservas.find((r) => r._id === reservationId || r.id === reservationId);
+            if (!reserva) return;
+
+            const excursion = excursiones.find((ex) => ex._id === reserva.excursionId);
+            if (excursion) {
+                const nuevoReservadoPor = (excursion.reservadoPor || []).filter(id => id !== reserva.userId);
+                await updateExcursion(excursion._id, { reservadoPor: nuevoReservadoPor });
+            }
+
+            await deleteReservation(reservationId);
+            setReservas((prev) => prev.filter((r) => r._id !== reservationId && r.id !== reservationId));
             alert("Reserva eliminada exitosamente");
         } catch (error) {
             console.error("Error al eliminar la reserva:", error);
         }
     };
 
-    const handleRemoveReservationFromExcursion = async (excursionId) => {
+    const handleRemoveReservationFromExcursion = async (reservationId) => {
         try {
-            await updateExcursion(excursionId, {
-                reservadoPor: "",
-                fechaReserva: ""
-            });
+            const reserva = reservas.find((r) => r._id === reservationId || r.id === reservationId);
+            if (!reserva) return;
+
+            const excursion = excursiones.find((ex) => ex._id === reserva.excursionId);
+            if (!excursion) return;
+
+            const nuevoReservadoPor = (excursion.reservadoPor || []).filter(id => id !== reserva.userId);
+            await updateExcursion(excursion._id, { reservadoPor: nuevoReservadoPor });
+
             alert("Reserva eliminada de la excursión exitosamente");
-            fetchReservas();
+            fetchData();
         } catch (error) {
             console.error("Error al quitar reserva de excursión:", error);
         }
@@ -66,35 +86,43 @@ const ManageReservations = () => {
                     Gestionar Reservas
                 </h2>
 
-                {/* Mostrar lista de reservas */}
                 {reservas.length === 0 ? (
                     <h3 className="text-center">No hay reservas disponibles.</h3>
                 ) : (
                     reservas.map((reservation) => (
-                        <div key={reservation.id} className="card mb-3 shadow">
+                        <div key={reservation._id || reservation.id} className="card mb-3 shadow">
                             <div className="row g-0">
                                 <div className="col-md-8">
                                     <div className="card-body">
                                         <h3 className="card-title">Reserva para: {reservation.ruta}</h3>
                                         <p className="card-text"><strong>Fecha de la reserva:</strong> {reservation.fecha}</p>
-
-                                        {/* Información de la reserva */}
                                         <p className="card-text">
                                             <strong>Reservada por:</strong> {reservation.nombre || "Desconocido"}<br />
                                             <strong>Email:</strong> {reservation.email || "No disponible"}<br />
                                             <strong>Teléfono:</strong> {reservation.telefono || "No disponible"}
                                         </p>
 
-                                        {/* Botones de acción */}
-                                        <button className="btn btn-warning me-2" onClick={() => { setEditingReservation(reservation); setEditingDate(reservation.fecha); }}>
+                                        <button
+                                            className="btn btn-warning me-2"
+                                            onClick={() => {
+                                                setEditingReservation(reservation);
+                                                setEditingDate(reservation.fecha);
+                                            }}
+                                        >
                                             ✏️ Editar Fecha
                                         </button>
 
-                                        <button className="btn btn-danger" onClick={() => handleDeleteReservation(reservation.id)}>
+                                        <button
+                                            className="btn btn-danger"
+                                            onClick={() => handleDeleteReservation(reservation._id || reservation.id)}
+                                        >
                                             ❌ Eliminar Reserva
                                         </button>
 
-                                        <button className="btn btn-warning ms-2" onClick={() => handleRemoveReservationFromExcursion(reservation.id)}>
+                                        <button
+                                            className="btn btn-warning ms-2"
+                                            onClick={() => handleRemoveReservationFromExcursion(reservation._id || reservation.id)}
+                                        >
                                             ❌ Quitar Reserva de Excursión
                                         </button>
                                     </div>
@@ -104,7 +132,6 @@ const ManageReservations = () => {
                     ))
                 )}
 
-                {/* Formulario para editar la fecha de la reserva */}
                 {editingReservation && (
                     <div className="mt-4">
                         <h4>Editar fecha de la reserva para: {editingReservation.ruta}</h4>
@@ -116,7 +143,7 @@ const ManageReservations = () => {
                         />
                         <button
                             className="btn btn-success mt-2"
-                            onClick={() => handleChangeDate(editingReservation.id, editingDate)}
+                            onClick={() => handleChangeDate(editingReservation._id || editingReservation.id, editingDate)}
                         >
                             Guardar Cambios
                         </button>

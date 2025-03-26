@@ -14,6 +14,7 @@ const Reservation = () => {
         ruta: "",
         guiaId: "",
     });
+
     const [usuario, setUsuario] = useState(null);
     const [destinos, setDestinos] = useState([]);
     const [excursiones, setExcursiones] = useState([]);
@@ -69,7 +70,7 @@ const Reservation = () => {
         try {
             const todas = await getExcursions();
             const filtradas = todas
-                .filter((ex) => ex.nombre === rutaSeleccionada && !ex.reservadoPor)
+                .filter((ex) => ex.nombre === rutaSeleccionada && (!ex.reservadoPor || ex.reservadoPor.length < ex.maxPersonas))
                 .map((ex) => ({
                     ...ex,
                     guia: ex.guiaNombre || "Guía asignado",
@@ -97,7 +98,25 @@ const Reservation = () => {
 
     const handleReserva = async () => {
         try {
-            if (!reserva.guiaId) throw new Error("El campo guía no puede estar vacío.");
+            const userId = localStorage.getItem("userId");
+
+            if (!reserva.guiaId || !userId || !excursionSeleccionada?._id) {
+                throw new Error("Faltan datos para procesar la reserva.");
+            }
+
+            // Validación: verificar si ya reservó
+            const yaReservo = excursionSeleccionada.reservadoPor?.includes(userId);
+            if (yaReservo) {
+                alert("Ya tienes una reserva para esta excursión.");
+                return;
+            }
+
+            // Validación de cupo
+            const cuposOcupados = excursionSeleccionada.reservadoPor?.length || 0;
+            if (excursionSeleccionada.maxPersonas && cuposOcupados >= excursionSeleccionada.maxPersonas) {
+                alert("No hay cupos disponibles en esta excursión.");
+                return;
+            }
 
             const reservaData = {
                 nombre: reserva.nombre,
@@ -107,6 +126,8 @@ const Reservation = () => {
                 ruta: reserva.ruta,
                 fecha: reserva.fecha,
                 guiaId: reserva.guiaId,
+                userId,
+                excursionId: excursionSeleccionada._id,
             };
 
             for (let key in reservaData) {
@@ -115,13 +136,13 @@ const Reservation = () => {
                 }
             }
 
-            const created = await createReservation(reservaData);
+            await createReservation(reservaData);
 
-            if (excursionSeleccionada) {
-                await updateExcursion(excursionSeleccionada._id || excursionSeleccionada.id, {
-                    reservadoPor: created._id,
-                });
-            }
+            // Agregar usuario al array reservadoPor
+            const nuevosReservados = [...(excursionSeleccionada.reservadoPor || []), userId];
+            await updateExcursion(excursionSeleccionada._id, {
+                reservadoPor: nuevosReservados,
+            });
 
             alert("Reserva realizada con éxito.");
             setReserva({ nombre: "", apellido: "", email: "", telefono: "", fecha: "", ruta: "", guiaId: "" });
@@ -131,6 +152,7 @@ const Reservation = () => {
             alert("Hubo un error al realizar la reserva: " + error.message);
         }
     };
+
     return (
         <>
             <div className="container-fluid p-4 text-center" style={{ backgroundColor: "#045c2c" }}>
@@ -156,11 +178,14 @@ const Reservation = () => {
                 {!excursionSeleccionada && excursiones.length > 0 && (
                     <div className="row mt-4 justify-content-center">
                         {excursiones.map(excursion => (
-                            <div key={excursion.id} className="col-md-4 mb-4">
+                            <div key={excursion._id || excursion.id} className="col-md-4 mb-4">
                                 <div className="card shadow-lg p-3 text-center" style={{ borderRadius: "15px" }}>
                                     <h5 className="fw-bold">{excursion.nombre}</h5>
                                     <p className="text-muted">Guía: {excursion.guia}</p>
                                     <p className="text-muted">Fecha: {excursion.fecha}</p>
+                                    <p className="text-muted">
+                                        Cupos disponibles: {excursion.maxPersonas - (excursion.reservadoPor?.length || 0)}
+                                    </p>
                                     <button className="btn btn-success mt-2" onClick={() => handleSeleccionarExcursion(excursion)}>
                                         Seleccionar
                                     </button>

@@ -22,10 +22,8 @@ const ManageExcursions = () => {
     const [destinations, setDestinations] = useState([]);
     const [guides, setGuides] = useState([]);
 
-    // 🟢 Fecha de hoy
     const today = new Date().toISOString().split("T")[0];
 
-    // 🟢 Cargar datos iniciales
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -55,21 +53,19 @@ const ManageExcursions = () => {
         fetchGuides();
     }, []);
 
-    // 🔁 Filtrar excursiones por estado
     useEffect(() => {
         if (filterStatus === "todos") {
             setFilteredExcursions(excursions);
         } else {
             const filtered = excursions.filter(exc =>
                 filterStatus === "reservada"
-                    ? exc.reservadoPor
-                    : !exc.reservadoPor
+                    ? Array.isArray(exc.reservadoPor) && exc.reservadoPor.length > 0
+                    : !exc.reservadoPor || exc.reservadoPor.length === 0
             );
             setFilteredExcursions(filtered);
         }
     }, [filterStatus, excursions]);
 
-    // 🔄 Input de formularios
     const handleInputChange = (e, setter) => {
         const { name, value } = e.target;
         setter(prev => ({ ...prev, [name]: value }));
@@ -79,12 +75,23 @@ const ManageExcursions = () => {
         setEditExcursion(prev => ({ ...prev, destinoId: e.target.value }));
     };
 
-    // ➕ Agregar excursión
     const handleAddExcursion = async (e) => {
         e.preventDefault();
 
         if (newExcursion.fecha < today) {
             alert("La fecha no puede ser anterior a hoy.");
+            return;
+        }
+
+        const max = Number(newExcursion.maxPersonas);
+        if (isNaN(max) || max < 1 || max > 30) {
+            alert("El campo 'Máximo de personas' debe ser un número entre 1 y 30.");
+            return;
+        }
+
+        const yaExisteMismaFecha = excursions.some(exc => exc.fecha === newExcursion.fecha);
+        if (yaExisteMismaFecha) {
+            alert("Ya existe una excursión para esa fecha. No se puede agregar otra.");
             return;
         }
 
@@ -100,7 +107,8 @@ const ManageExcursions = () => {
         }
     };
 
-    // 📝 Editar excursión
+
+
     const handleEdit = (excursion) => {
         setEditExcursion({ ...excursion });
         setEditExcursionId(excursion._id || excursion.id);
@@ -116,6 +124,22 @@ const ManageExcursions = () => {
             return;
         }
 
+        const max = Number(editExcursion.maxPersonas);
+        if (isNaN(max) || max < 1 || max > 30) {
+            alert("El campo 'Máximo de personas' debe ser un número entre 1 y 30.");
+            return;
+        }
+
+        const yaExisteOtraMismaFecha = excursions.some(exc =>
+            exc.fecha === editExcursion.fecha &&
+            (exc._id || exc.id) !== editExcursionId
+        );
+
+        if (yaExisteOtraMismaFecha) {
+            alert("Ya existe otra excursión programada para esa fecha.");
+            return;
+        }
+
         try {
             await updateExcursion(editExcursionId, editExcursion);
             const updated = await getExcursions();
@@ -128,7 +152,8 @@ const ManageExcursions = () => {
         }
     };
 
-    // 🗑️ Eliminar
+
+
     const handleDelete = async (id) => {
         const confirmDelete = window.confirm("¿Eliminar esta excursión?");
         if (!confirmDelete) return;
@@ -160,45 +185,63 @@ const ManageExcursions = () => {
                 </div>
 
                 <div style={{ marginTop: "20px", display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
-                    {filteredExcursions.map(excursion => (
-                        <div key={excursion._id} style={{
-                            border: "1px solid #ddd",
-                            padding: "15px",
-                            margin: "10px",
-                            backgroundColor: "#fff",
-                            borderRadius: "8px",
-                            width: "300px",
-                            boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-                            transition: "transform 0.3s ease",
-                        }}>
-                            <h3 style={{ marginBottom: "10px", fontSize: "1.5rem", color: "#31470b" }}>{excursion.nombre}</h3>
-                            <p><strong>Descripción:</strong> {excursion.descripcion}</p>
-                            <p><strong>Fecha:</strong> {excursion.fecha}</p>
-                            <p><strong>Guía:</strong> {guides.find(g => g._id === excursion.guiaId)?.nombre || "No asignado"}</p>
-                            <p><strong>Estado:</strong> {excursion.reservadoPor ? `Reservada, ID Reserva: ${excursion.reservadoPor}` : "No reservada"}</p>
-                            <button onClick={() => handleEdit(excursion)} style={{
-                                backgroundColor: "#28a745",
-                                color: "white",
-                                padding: "10px 20px",
-                                border: "none",
-                                borderRadius: "5px",
-                                cursor: "pointer",
-                                marginRight: "10px",
+                    {filteredExcursions.map(excursion => {
+                        const reservadoPor = excursion.reservadoPor || [];
+                        const cuposRestantes = excursion.maxPersonas ? excursion.maxPersonas - reservadoPor.length : null;
+                        const isReservada = reservadoPor.length > 0;
+
+                        return (
+                            <div key={excursion._id} style={{
+                                border: "1px solid #ddd",
+                                padding: "15px",
+                                margin: "10px",
+                                backgroundColor: isReservada ? "#e6f9e6" : "#fff",
+                                borderRadius: "8px",
+                                width: "300px",
+                                boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+                                transition: "transform 0.3s ease",
                             }}>
-                                Editar
-                            </button>
-                            <button onClick={() => handleDelete(excursion._id)} style={{
-                                backgroundColor: "#dc3545",
-                                color: "white",
-                                padding: "10px 20px",
-                                border: "none",
-                                borderRadius: "5px",
-                                cursor: "pointer",
-                            }}>
-                                Eliminar
-                            </button>
-                        </div>
-                    ))}
+                                <h3 style={{ marginBottom: "10px", fontSize: "1.5rem", color: "#31470b" }}>{excursion.nombre}</h3>
+                                <p><strong>Descripción:</strong> {excursion.descripcion}</p>
+                                <p><strong>Fecha:</strong> {excursion.fecha}</p>
+                                <p><strong>Guía:</strong> {guides.find(g => g._id === excursion.guiaId)?.nombre || "No asignado"}</p>
+                                <p>
+                                    <strong>Estado:</strong>{" "}
+                                    {isReservada ? (
+                                        <>
+                                            Reservada por {reservadoPor.length} persona{reservadoPor.length > 1 ? "s" : ""}.
+                                            {excursion.maxPersonas && (
+                                                <> Quedan {cuposRestantes} cupo{cuposRestantes !== 1 ? "s" : ""}.</>
+                                            )}
+                                        </>
+                                    ) : (
+                                        "No reservada"
+                                    )}
+                                </p>
+                                <button onClick={() => handleEdit(excursion)} style={{
+                                    backgroundColor: "#28a745",
+                                    color: "white",
+                                    padding: "10px 20px",
+                                    border: "none",
+                                    borderRadius: "5px",
+                                    cursor: "pointer",
+                                    marginRight: "10px",
+                                }}>
+                                    Editar
+                                </button>
+                                <button onClick={() => handleDelete(excursion._id)} style={{
+                                    backgroundColor: "#dc3545",
+                                    color: "white",
+                                    padding: "10px 20px",
+                                    border: "none",
+                                    borderRadius: "5px",
+                                    cursor: "pointer",
+                                }}>
+                                    Eliminar
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div style={{ marginTop: "20px" }}>
@@ -231,6 +274,7 @@ const ManageExcursions = () => {
                     }}>
                         <input type="text" name="nombre" placeholder="Nombre de la ruta" value={newExcursion.nombre || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
                         <textarea name="descripcion" placeholder="Descripción de la ruta" value={newExcursion.descripcion || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
+                        <input type="number" name="maxPersonas" placeholder="Máximo de personas" value={newExcursion.maxPersonas || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
                         <input type="date" name="fecha" value={newExcursion.fecha || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} required min={today} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
                         <input type="text" name="dificultad" placeholder="Dificultad" value={newExcursion.dificultad || ""} onChange={(e) => handleInputChange(e, setNewExcursion)} style={{ marginBottom: "10px", padding: "10px", borderRadius: "5px", border: "1px solid #ddd", width: "100%" }} />
 
