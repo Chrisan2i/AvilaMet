@@ -1,22 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const Excursion = require('../models/Excursion');
+const Reservation = require('../models/Reservation'); // 👈 importante
 
 // Obtener todas las excursiones
 router.get('/', async (req, res) => {
-    try {
-        const excursiones = await Excursion.find().lean();
+	try {
+		const excursiones = await Excursion.find().lean();
 
-        const disponibles = excursiones.filter(exc =>
-            !exc.maxPersonas || (exc.reservadoPor?.length || 0) < exc.maxPersonas
-        );
+		const disponibles = excursiones.filter(exc =>
+			!exc.maxPersonas || (exc.reservadoPor?.length || 0) < exc.maxPersonas
+		);
 
-        res.json(disponibles);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+		res.json(disponibles);
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
 });
-
 
 // Crear excursión
 router.post('/', async (req, res) => {
@@ -39,11 +39,18 @@ router.put('/:id', async (req, res) => {
 	}
 });
 
-// Eliminar excursión
+// Eliminar excursión y sus reservas asociadas
 router.delete('/:id', async (req, res) => {
 	try {
-		await Excursion.findByIdAndDelete(req.params.id);
-		res.json({ message: "Excursión eliminada" });
+		const excursionId = req.params.id;
+
+		// Eliminar todas las reservas asociadas
+		await Reservation.deleteMany({ excursionId });
+
+		// Eliminar la excursión
+		await Excursion.findByIdAndDelete(excursionId);
+
+		res.json({ message: "Excursión y sus reservas eliminadas correctamente." });
 	} catch (err) {
 		res.status(500).json({ message: err.message });
 	}
